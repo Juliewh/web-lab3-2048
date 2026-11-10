@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>2048</title>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>2048</h1>
+
+      <section aria-label="Счёт">
+        <p>Счёт: <span id="score">0</span></p>
+      </section>
+
+      <nav aria-label="Управление игрой">
+        <button id="undo-button" type="button" disabled>Отменить ход</button>
+        <button id="restart-button" type="button">Начать заново</button>
+        <button id="leaderboard-button" type="button">Таблица лидеров</button>
+      </nav>
+    </header>
+
+    <section aria-label="Игровое поле">
+      <div
+        id="game-board"
+        role="grid"
+        aria-label="Игровое поле 4 на 4"
+      ></div>
+
+      <div id="mobile-controls" aria-label="Управление направлением" hidden>
+        <button type="button" data-direction="up" aria-label="Вверх">↑</button>
+        <button type="button" data-direction="left" aria-label="Влево">←</button>
+        <button type="button" data-direction="down" aria-label="Вниз">↓</button>
+        <button type="button" data-direction="right" aria-label="Вправо">→</button>
+      </div>
+    </section>
+  </main>
+
+  <section id="game-over-modal" role="dialog" aria-labelledby="game-over-title" hidden>
+    <h2 id="game-over-title">Игра окончена</h2>
+    <p id="game-over-message">Введите имя, чтобы сохранить результат.</p>
+    <p>Ваш счёт: <span id="final-score">0</span></p>
+
+    <label for="record-name">Имя пользователя</label>
+    <input
+      id="record-name"
+      type="text"
+      maxlength="30"
+      autocomplete="nickname"
+    >
+    <button id="save-record-button" type="button">Сохранить результат</button>
+    <button id="game-over-restart-button" type="button">Начать заново</button>
+  </section>
+
+  <section id="leaderboard-modal" role="dialog" aria-labelledby="leaderboard-title" hidden>
+    <h2 id="leaderboard-title">Таблица лидеров</h2>
+
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Имя пользователя</th>
+          <th scope="col">Очки</th>
+          <th scope="col">Дата</th>
+        </tr>
+      </thead>
+      <tbody id="leaderboard-body"></tbody>
+    </table>
+
+    <button id="close-leaderboard-button" type="button">Закрыть</button>
+  </section>
+</body>
+</html>
