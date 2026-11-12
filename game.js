@@ -4,8 +4,19 @@ const BOARD_SIZE = 4;
 const TOTAL_CELLS = BOARD_SIZE * BOARD_SIZE;
 
 const gameBoardElement = document.querySelector("#game-board");
+const scoreElement = document.querySelector("#score");
+const mobileControlsElement = document.querySelector("#mobile-controls");
 const board = Array(TOTAL_CELLS).fill(0);
 const cells = [];
+
+let score = 0;
+
+const keyDirections = {
+  ArrowUp: "up",
+  ArrowRight: "right",
+  ArrowDown: "down",
+  ArrowLeft: "left",
+};
 
 function createBoard() {
   const fragment = document.createDocumentFragment();
@@ -38,6 +49,10 @@ function renderBoard() {
   });
 }
 
+function renderScore() {
+  scoreElement.textContent = String(score);
+}
+
 function getRandomInteger(minimum, maximum) {
   return Math.floor(Math.random() * (maximum - minimum + 1)) + minimum;
 }
@@ -52,17 +67,29 @@ function addRandomTile() {
   });
 
   if (emptyCellIndexes.length === 0) {
-    return;
+    return false;
   }
 
   const randomIndex = getRandomInteger(0, emptyCellIndexes.length - 1);
   const cellIndex = emptyCellIndexes[randomIndex];
 
   board[cellIndex] = Math.random() < 0.9 ? 2 : 4;
+  return true;
+}
+
+function addRandomTilesAfterMove() {
+  const tileCount = getRandomInteger(1, 2);
+
+  for (let index = 0; index < tileCount; index += 1) {
+    if (!addRandomTile()) {
+      break;
+    }
+  }
 }
 
 function startNewGame() {
   board.fill(0);
+  score = 0;
 
   const initialTileCount = getRandomInteger(1, 3);
 
@@ -71,7 +98,147 @@ function startNewGame() {
   }
 
   renderBoard();
+  renderScore();
 }
+
+function getLineIndexes(direction, lineIndex) {
+  const indexes = [];
+
+  for (let offset = 0; offset < BOARD_SIZE; offset += 1) {
+    let row;
+    let column;
+
+    if (direction === "left") {
+      row = lineIndex;
+      column = offset;
+    } else if (direction === "right") {
+      row = lineIndex;
+      column = BOARD_SIZE - 1 - offset;
+    } else if (direction === "up") {
+      row = offset;
+      column = lineIndex;
+    } else if (direction === "down") {
+      row = BOARD_SIZE - 1 - offset;
+      column = lineIndex;
+    } else {
+      return [];
+    }
+
+    indexes.push(row * BOARD_SIZE + column);
+  }
+
+  return indexes;
+}
+
+function mergeLine(values) {
+  const mergedValues = [];
+  let scoreGained = 0;
+
+  for (const value of values) {
+    if (value === 0) {
+      continue;
+    }
+
+    const lastIndex = mergedValues.length - 1;
+
+    if (lastIndex < 0 || mergedValues[lastIndex] !== value) {
+      mergedValues.push(value);
+      continue;
+    }
+
+    const mergedValue = value * 2;
+    mergedValues[lastIndex] = mergedValue;
+    scoreGained += mergedValue;
+
+    while (mergedValues.length > 1) {
+      const rightIndex = mergedValues.length - 1;
+      const leftIndex = rightIndex - 1;
+
+      if (mergedValues[leftIndex] !== mergedValues[rightIndex]) {
+        break;
+      }
+
+      const chainedValue = mergedValues[rightIndex] * 2;
+      mergedValues[leftIndex] = chainedValue;
+      mergedValues.pop();
+      scoreGained += chainedValue;
+    }
+  }
+
+  while (mergedValues.length < BOARD_SIZE) {
+    mergedValues.push(0);
+  }
+
+  return {
+    values: mergedValues,
+    scoreGained,
+  };
+}
+
+function move(direction) {
+  const nextBoard = board.slice();
+  let scoreGained = 0;
+
+  for (let lineIndex = 0; lineIndex < BOARD_SIZE; lineIndex += 1) {
+    const indexes = getLineIndexes(direction, lineIndex);
+    const line = indexes.map((index) => board[index]);
+    const result = mergeLine(line);
+
+    result.values.forEach((value, position) => {
+      nextBoard[indexes[position]] = value;
+    });
+
+    scoreGained += result.scoreGained;
+  }
+
+  const boardChanged = nextBoard.some(
+    (value, index) => value !== board[index]
+  );
+
+  if (!boardChanged) {
+    return;
+  }
+
+  nextBoard.forEach((value, index) => {
+    board[index] = value;
+  });
+
+  score += scoreGained;
+  addRandomTilesAfterMove();
+  renderBoard();
+  renderScore();
+}
+
+document.addEventListener("keydown", (event) => {
+  if (event.target instanceof HTMLInputElement) {
+    return;
+  }
+
+  const direction = keyDirections[event.key];
+
+  if (!direction) {
+    return;
+  }
+
+  event.preventDefault();
+  move(direction);
+});
+
+mobileControlsElement.querySelectorAll("[data-direction]").forEach((button) => {
+  button.addEventListener("click", () => {
+    move(button.dataset.direction);
+  });
+});
+
+document
+  .querySelector("#restart-button")
+  .addEventListener("click", startNewGame);
+
+document
+  .querySelector("#game-over-restart-button")
+  .addEventListener("click", startNewGame);
+
+mobileControlsElement.hidden = false;
 
 createBoard();
 startNewGame();
