@@ -5,11 +5,17 @@ const TOTAL_CELLS = BOARD_SIZE * BOARD_SIZE;
 
 const gameBoardElement = document.querySelector("#game-board");
 const scoreElement = document.querySelector("#score");
+const undoButton = document.querySelector("#undo-button");
 const mobileControlsElement = document.querySelector("#mobile-controls");
+const gameOverModal = document.querySelector("#game-over-modal");
+const gameOverMessage = document.querySelector("#game-over-message");
+const recordNameInput = document.querySelector("#record-name");
 const board = Array(TOTAL_CELLS).fill(0);
 const cells = [];
 
 let score = 0;
+let previousState = null;
+let isGameOver = false;
 
 const keyDirections = {
   ArrowUp: "up",
@@ -53,6 +59,10 @@ function renderScore() {
   scoreElement.textContent = String(score);
 }
 
+function updateUndoButton() {
+  undoButton.disabled = isGameOver || previousState === null;
+}
+
 function getRandomInteger(minimum, maximum) {
   return Math.floor(Math.random() * (maximum - minimum + 1)) + minimum;
 }
@@ -90,6 +100,13 @@ function addRandomTilesAfterMove() {
 function startNewGame() {
   board.fill(0);
   score = 0;
+  previousState = null;
+  isGameOver = false;
+
+  gameOverModal.hidden = true;
+  mobileControlsElement.hidden = false;
+  recordNameInput.value = "";
+  gameOverMessage.textContent = "Введите имя, чтобы сохранить результат.";
 
   const initialTileCount = getRandomInteger(1, 3);
 
@@ -99,6 +116,7 @@ function startNewGame() {
 
   renderBoard();
   renderScore();
+  updateUndoButton();
 }
 
 function getLineIndexes(direction, lineIndex) {
@@ -175,7 +193,50 @@ function mergeLine(values) {
   };
 }
 
+function hasAvailableMoves() {
+  if (board.includes(0)) {
+    return true;
+  }
+
+  for (let row = 0; row < BOARD_SIZE; row += 1) {
+    for (let column = 0; column < BOARD_SIZE; column += 1) {
+      const index = row * BOARD_SIZE + column;
+      const value = board[index];
+
+      if (
+        column + 1 < BOARD_SIZE &&
+        value === board[index + 1]
+      ) {
+        return true;
+      }
+
+      if (
+        row + 1 < BOARD_SIZE &&
+        value === board[index + BOARD_SIZE]
+      ) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+function finishGame() {
+  isGameOver = true;
+  previousState = null;
+  gameOverMessage.textContent =
+    "Ходов больше нет. Введите имя, чтобы сохранить результат.";
+  gameOverModal.hidden = false;
+  mobileControlsElement.hidden = true;
+  updateUndoButton();
+}
+
 function move(direction) {
+  if (isGameOver) {
+    return;
+  }
+
   const nextBoard = board.slice();
   let scoreGained = 0;
 
@@ -199,18 +260,48 @@ function move(direction) {
     return;
   }
 
+  const stateBeforeMove = {
+    board: board.slice(),
+    score,
+  };
+
   nextBoard.forEach((value, index) => {
     board[index] = value;
   });
 
   score += scoreGained;
   addRandomTilesAfterMove();
+
+  if (hasAvailableMoves()) {
+    previousState = stateBeforeMove;
+    updateUndoButton();
+  } else {
+    finishGame();
+  }
+
   renderBoard();
   renderScore();
 }
 
+function undoMove() {
+  if (isGameOver || previousState === null) {
+    return;
+  }
+
+  previousState.board.forEach((value, index) => {
+    board[index] = value;
+  });
+
+  score = previousState.score;
+  previousState = null;
+
+  renderBoard();
+  renderScore();
+  updateUndoButton();
+}
+
 document.addEventListener("keydown", (event) => {
-  if (event.target instanceof HTMLInputElement) {
+  if (isGameOver || event.target instanceof HTMLInputElement) {
     return;
   }
 
@@ -229,6 +320,8 @@ mobileControlsElement.querySelectorAll("[data-direction]").forEach((button) => {
     move(button.dataset.direction);
   });
 });
+
+undoButton.addEventListener("click", undoMove);
 
 document
   .querySelector("#restart-button")
