@@ -1,5 +1,6 @@
 "use strict";
 
+
 const BOARD_SIZE = 4;
 const TOTAL_CELLS = BOARD_SIZE * BOARD_SIZE;
 
@@ -9,9 +10,18 @@ const undoButton = document.querySelector("#undo-button");
 const mobileControlsElement = document.querySelector("#mobile-controls");
 const gameOverModal = document.querySelector("#game-over-modal");
 const gameOverMessage = document.querySelector("#game-over-message");
+const finalScoreElement = document.querySelector("#final-score");
 const recordNameInput = document.querySelector("#record-name");
 const board = Array(TOTAL_CELLS).fill(0);
 const cells = [];
+
+const saveRecordButton = document.querySelector("#save-record-button");
+const recordNameLabel = document.querySelector('label[for="record-name"]');
+const leaderboardModal = document.querySelector("#leaderboard-modal");
+const leaderboardBody = document.querySelector("#leaderboard-body");
+
+const LEADERBOARD_STORAGE_KEY = "2048Leaderboard";
+const MAX_LEADERBOARD_RECORDS = 10;
 
 let score = 0;
 let previousState = null;
@@ -104,8 +114,13 @@ function startNewGame() {
   isGameOver = false;
 
   gameOverModal.hidden = true;
+  leaderboardModal.hidden = true;
   mobileControlsElement.hidden = false;
+
   recordNameInput.value = "";
+  recordNameInput.hidden = false;
+  recordNameLabel.hidden = false;
+  saveRecordButton.hidden = false;
   gameOverMessage.textContent = "Введите имя, чтобы сохранить результат.";
 
   const initialTileCount = getRandomInteger(1, 3);
@@ -225,15 +240,18 @@ function hasAvailableMoves() {
 function finishGame() {
   isGameOver = true;
   previousState = null;
+
+  finalScoreElement.textContent = String(score);
   gameOverMessage.textContent =
     "Ходов больше нет. Введите имя, чтобы сохранить результат.";
   gameOverModal.hidden = false;
   mobileControlsElement.hidden = true;
+
   updateUndoButton();
 }
 
 function move(direction) {
-  if (isGameOver) {
+  if (isGameOver || !leaderboardModal.hidden) {
     return;
   }
 
@@ -284,7 +302,7 @@ function move(direction) {
 }
 
 function undoMove() {
-  if (isGameOver || previousState === null) {
+  if (isGameOver || !leaderboardModal.hidden) {
     return;
   }
 
@@ -300,8 +318,133 @@ function undoMove() {
   updateUndoButton();
 }
 
+function loadLeaderboard() {
+  try {
+    const savedRecords = localStorage.getItem(LEADERBOARD_STORAGE_KEY);
+
+    if (savedRecords === null) {
+      return [];
+    }
+
+    const records = JSON.parse(savedRecords);
+
+    if (!Array.isArray(records)) {
+      return [];
+    }
+
+    return records.filter((record) =>
+      record &&
+      typeof record.name === "string" &&
+      typeof record.score === "number" &&
+      Number.isFinite(record.score) &&
+      typeof record.date === "string"
+    );
+  } catch {
+    return [];
+  }
+}
+
+function renderLeaderboard() {
+  const records = loadLeaderboard()
+    .sort((first, second) => {
+      const scoreDifference = second.score - first.score;
+
+      if (scoreDifference !== 0) {
+        return scoreDifference;
+      }
+
+      return (Date.parse(first.date) || 0) - (Date.parse(second.date) || 0);
+    })
+    .slice(0, MAX_LEADERBOARD_RECORDS);
+
+  const fragment = document.createDocumentFragment();
+
+  if (records.length === 0) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+
+    cell.colSpan = 3;
+    cell.textContent = "Пока нет сохранённых рекордов.";
+    row.appendChild(cell);
+    fragment.appendChild(row);
+  } else {
+    records.forEach((record) => {
+      const row = document.createElement("tr");
+      const nameCell = document.createElement("td");
+      const scoreCell = document.createElement("td");
+      const dateCell = document.createElement("td");
+      const recordDate = new Date(record.date);
+
+      nameCell.textContent = record.name;
+      scoreCell.textContent = String(record.score);
+      dateCell.textContent = Number.isNaN(recordDate.getTime())
+        ? "—"
+        : recordDate.toLocaleDateString("ru-RU");
+
+      row.append(nameCell, scoreCell, dateCell);
+      fragment.appendChild(row);
+    });
+  }
+
+  leaderboardBody.replaceChildren(fragment);
+}
+
+function saveCurrentRecord() {
+  const name = recordNameInput.value.trim();
+
+  if (name.length === 0) {
+    gameOverMessage.textContent = "Введите имя, чтобы сохранить результат.";
+    recordNameInput.focus();
+    return;
+  }
+
+  const records = loadLeaderboard();
+
+  records.push({
+    name,
+    score,
+    date: new Date().toISOString(),
+  });
+
+  try {
+    localStorage.setItem(LEADERBOARD_STORAGE_KEY, JSON.stringify(records));
+  } catch {
+    gameOverMessage.textContent =
+      "Не удалось сохранить рекорд. Попробуйте ещё раз.";
+    return;
+  }
+
+  recordNameInput.hidden = true;
+  recordNameLabel.hidden = true;
+  saveRecordButton.hidden = true;
+  gameOverMessage.textContent = "Ваш рекорд сохранен";
+
+  renderLeaderboard();
+}
+
+function openLeaderboard() {
+  renderLeaderboard();
+  gameOverModal.hidden = true;
+  leaderboardModal.hidden = false;
+  mobileControlsElement.hidden = true;
+}
+
+function closeLeaderboard() {
+  leaderboardModal.hidden = true;
+
+  if (isGameOver) {
+    gameOverModal.hidden = false;
+  }
+
+  mobileControlsElement.hidden = isGameOver;
+}
+
 document.addEventListener("keydown", (event) => {
-  if (isGameOver || event.target instanceof HTMLInputElement) {
+  if (
+  isGameOver ||
+  !leaderboardModal.hidden ||
+  event.target instanceof HTMLInputElement
+  ) {
     return;
   }
 
@@ -330,6 +473,18 @@ document
 document
   .querySelector("#game-over-restart-button")
   .addEventListener("click", startNewGame);
+
+document
+  .querySelector("#save-record-button")
+  .addEventListener("click", saveCurrentRecord);
+
+document
+  .querySelector("#leaderboard-button")
+  .addEventListener("click", openLeaderboard);
+
+document
+  .querySelector("#close-leaderboard-button")
+  .addEventListener("click", closeLeaderboard);
 
 mobileControlsElement.hidden = false;
 
