@@ -21,11 +21,13 @@ const leaderboardModal = document.querySelector("#leaderboard-modal");
 const leaderboardBody = document.querySelector("#leaderboard-body");
 
 const LEADERBOARD_STORAGE_KEY = "2048Leaderboard";
+const GAME_STATE_STORAGE_KEY = "2048GameState";
 const MAX_LEADERBOARD_RECORDS = 10;
 
 let score = 0;
 let previousState = null;
 let isGameOver = false;
+let isRecordSaved = false;
 
 const keyDirections = {
   ArrowUp: "up",
@@ -112,6 +114,7 @@ function startNewGame() {
   score = 0;
   previousState = null;
   isGameOver = false;
+  isRecordSaved = false;
 
   gameOverModal.hidden = true;
   leaderboardModal.hidden = true;
@@ -132,6 +135,125 @@ function startNewGame() {
   renderBoard();
   renderScore();
   updateUndoButton();
+  saveGameState();
+}
+
+function saveGameState() {
+  const state = {
+    board: board.slice(),
+    score,
+    previousState,
+    isGameOver,
+    isRecordSaved,
+    recordName: recordNameInput.value,
+  };
+
+  try {
+    localStorage.setItem(GAME_STATE_STORAGE_KEY, JSON.stringify(state));
+  } catch (error) {
+    console.error("Не удалось сохранить партию:", error);
+  }
+}
+
+function isValidBoard(candidate) {
+  return (
+    Array.isArray(candidate) &&
+    candidate.length === TOTAL_CELLS &&
+    candidate.every(
+      (value) =>
+        Number.isInteger(value) &&
+        (value === 0 ||
+          (value >= 2 && Number.isInteger(Math.log2(value))))
+    )
+  );
+}
+
+function loadGameState() {
+  try {
+    const savedState = localStorage.getItem(GAME_STATE_STORAGE_KEY);
+
+    if (savedState === null) {
+      return null;
+    }
+
+    const state = JSON.parse(savedState);
+
+    if (
+      !state ||
+      !isValidBoard(state.board) ||
+      !Number.isFinite(state.score) ||
+      state.score < 0
+    ) {
+      return null;
+    }
+
+    let savedPreviousState = null;
+
+    if (state.previousState !== null && state.previousState !== undefined) {
+      if (
+        !isValidBoard(state.previousState.board) ||
+        !Number.isFinite(state.previousState.score) ||
+        state.previousState.score < 0
+      ) {
+        return null;
+      }
+
+      savedPreviousState = {
+        board: state.previousState.board.slice(),
+        score: state.previousState.score,
+      };
+    }
+
+    return {
+      board: state.board.slice(),
+      score: state.score,
+      previousState: savedPreviousState,
+      isGameOver: state.isGameOver === true,
+      isRecordSaved: state.isRecordSaved === true,
+      recordName:
+        typeof state.recordName === "string" ? state.recordName : "",
+    };
+  } catch {
+    return null;
+  }
+}
+
+function restoreGameState(state) {
+  state.board.forEach((value, index) => {
+    board[index] = value;
+  });
+
+  score = state.score;
+  previousState = state.previousState;
+  isGameOver = state.isGameOver;
+  isRecordSaved = state.isRecordSaved;
+  recordNameInput.value = state.recordName;
+
+  leaderboardModal.hidden = true;
+
+  renderBoard();
+  renderScore();
+  updateUndoButton();
+
+  if (isGameOver) {
+    finalScoreElement.textContent = String(score);
+    gameOverModal.hidden = false;
+    mobileControlsElement.hidden = true;
+
+    recordNameInput.hidden = isRecordSaved;
+    recordNameLabel.hidden = isRecordSaved;
+    saveRecordButton.hidden = isRecordSaved;
+
+    gameOverMessage.textContent = isRecordSaved
+      ? "Ваш рекорд сохранен"
+      : "Ходов больше нет. Введите имя, чтобы сохранить результат.";
+  } else {
+    gameOverModal.hidden = true;
+    mobileControlsElement.hidden = false;
+    recordNameInput.hidden = false;
+    recordNameLabel.hidden = false;
+    saveRecordButton.hidden = false;
+  }
 }
 
 function getLineIndexes(direction, lineIndex) {
@@ -299,6 +421,7 @@ function move(direction) {
 
   renderBoard();
   renderScore();
+  saveGameState();
 }
 
 function undoMove() {
@@ -316,6 +439,7 @@ function undoMove() {
   renderBoard();
   renderScore();
   updateUndoButton();
+  saveGameState();
 }
 
 function loadLeaderboard() {
@@ -419,6 +543,9 @@ function saveCurrentRecord() {
   saveRecordButton.hidden = true;
   gameOverMessage.textContent = "Ваш рекорд сохранен";
 
+  isRecordSaved = true;
+  saveGameState();
+
   renderLeaderboard();
 }
 
@@ -438,6 +565,8 @@ function closeLeaderboard() {
 
   mobileControlsElement.hidden = isGameOver;
 }
+
+recordNameInput.addEventListener("input", saveGameState);
 
 document.addEventListener("keydown", (event) => {
   if (
@@ -486,7 +615,12 @@ document
   .querySelector("#close-leaderboard-button")
   .addEventListener("click", closeLeaderboard);
 
-mobileControlsElement.hidden = false;
-
 createBoard();
-startNewGame();
+
+const savedGameState = loadGameState();
+
+if (savedGameState === null) {
+  startNewGame();
+} else {
+  restoreGameState(savedGameState);
+}
